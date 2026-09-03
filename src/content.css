@@ -1,7 +1,7 @@
 /*
- * ドラッグ操作の描画はすべてこのレイヤーの中で行う。Google の要素には
- * インラインの `order` 以外何も足さないため、ここには Google のセレクタを
- * 一切書かない。
+ * ドラッグ操作の描画はすべてこのレイヤーの中で行う。Google の要素に足すのは
+ * インラインの `order` と、コンテナごとに 2 本だけの `border-right`（apply.ts 参照）
+ * に限るため、ここには Google のセレクタを一切書かない。
  */
 #gcalsorter-layer {
   position: fixed;

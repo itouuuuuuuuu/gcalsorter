@@ -68,10 +68,12 @@ the border, which is the same result in every theme.
 The other patched column has no such escape — a divider has to be *some* colour — so the resolved value
 is inlined there and watched instead. Two mechanisms:
 
-- `content.ts` invalidates the detection on `prefers-color-scheme` changes and on `class`/`style`
+- `content.ts` schedules a `reapply` on `prefers-color-scheme` changes and on `class`/`style`
   attribute changes on `<html>` and `<body>` (the in-app theme setting). Attributes only, no subtree:
   the day view rewrites attributes deep in its tree constantly, and watching those would fire every
-  frame.
+  frame. It only schedules; it does not drop the detection. Dropping it would cancel a drag in progress
+  (`drag.ts` gives up the moment `detection` is null) and force a full re-detect every time a dialog
+  toggles `body.style`, and it is unnecessary because the `verify` check below finds the stale colour.
 - `verify` re-checks the invariant the patch relies on — every column except the one on the right edge
   shares the same right border. That is one `getComputedStyle` pair per container, against the ~45
   `getBoundingClientRect` calls the position check already makes. A mismatch is treated exactly like a
@@ -80,6 +82,11 @@ is inlined there and watched instead. Two mechanisms:
 The first mechanism is what actually fires; a CSS-only theme change moves no nodes, so the main
 `MutationObserver` never sees it and `reapply` would not otherwise run at all. The check in `verify` is
 the backstop for a route that neither of those catches.
+
+Containers whose ordinary columns draw no right border (`0px none`) are left alone entirely — the
+header row, the all-day row and the sizing helper. Google's erase decoration is invisible there anyway,
+and comparing `0px none rgb(…)` strings would only compare the `currentColor` component, which has
+nothing to do with dividers.
 
 Restoring the border costs one more field on `RestoreEntry`. Rolling `order` back without it would leave
 the moved decoration behind, and the next `applyOrder` would then read the extension's own value as if it
@@ -153,5 +160,9 @@ Month view is the reason the test counts document-wide values rather than lookin
 inside each header: its headers are bare weekday names and carry no datekey either, so "no datekey
 in the header" would wave it through. Requiring *exactly one* distinct value across the document
 also fails in the safe direction — if Google ever drops the attribute the count becomes 0 and the
-extension stands down rather than reordering the days of a week. Opening the left drawer with its
-mini calendar does not add datekeys; measured with the drawer both closed and open.
+extension stands down rather than reordering the days of a week.
+
+Transient UI does not disturb the count. Measured, all still exactly one distinct value: the left drawer
+with its mini calendar open; the event-creation dialog; the start-date picker inside that dialog; and the
+date picker behind the header's date label. Those pickers mark their cells with `aria-labelledby`, not
+`data-datekey`.

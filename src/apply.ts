@@ -10,23 +10,48 @@ import type { ContainerRef, Detection } from './columns'
 
 export type RestoreEntry = { el: HTMLElement; order: string; borderRight: string }
 
-/** DOM 末尾の列の位置。列が無ければ -1。 */
-function domLastColumn(container: ContainerRef): number {
-  for (let i = container.columnChildren.length - 1; i >= 0; i--) {
-    if (container.columnChildren[i]) return i
-  }
-  return -1
+/**
+ * 右罫線の付け替えに関わる 3 者。`applyOrder` と `bordersConsistent` はこれを共有する。
+ *
+ * 判定を 2 か所に写すと、片方だけ直したときに「適用側は触らないのに検証側は拒む」
+ * 状態になり、rollback → 検出 → 適用 → 拒否のループに落ちる。
+ */
+type BorderPatch = {
+  /** DOM 末尾の列。右端以外に置かれたので、普通の罫線を持たせたい。 */
+  moved: HTMLElement
+  /** 右端に置いた列。罫線を消したい。 */
+  edge: HTMLElement
+  /** 触っていない列から読んだ、途中の列の右罫線。 */
+  normal: string
 }
 
 /**
- * 「途中の列」の右罫線。DOM 末尾の列と右端に置く列を除いた、最初の列から読む。
+ * 付け替えの対象を求める。何も付け替えないコンテナなら null。
  *
- * Google が右端の列にだけ装飾を当てるので、この 2 本を除けば残りはすべて同じ値になる
- * （実測）。見つからなければ null。
+ * - 列が 3 本未満、あるいは DOM 末尾の列がそのまま右端なら、付け替え自体が起きない。
+ * - 途中の列が右罫線を描いていない（幅 0 か `none`）コンテナも対象外。そこでは Google の
+ *   末尾装飾も見えないし、`0px none <currentColor>` の色成分だけを比べて揺れるのを避ける。
+ *
+ * 途中の列の値は、DOM 末尾でも右端でもない最初の列から読む。Google が装飾するのは
+ * 末尾の 1 本だけなので（実測）、残りはすべて同じ値になる。
  */
-function normalBorder(container: ContainerRef, domLast: number, rightEdge: number): string | null {
-  const el = container.columnChildren.find((c, i) => c !== null && i !== domLast && i !== rightEdge)
-  return el ? getComputedStyle(el).borderRight : null
+function borderPatch(container: ContainerRef, rightEdge: number): BorderPatch | null {
+  const children = container.columnChildren
+  let domLast = -1
+  for (let i = children.length - 1; i >= 0; i--) {
+    if (children[i]) {
+      domLast = i
+      break
+    }
+  }
+  if (domLast < 0 || domLast === rightEdge) return null
+  const moved = children[domLast]
+  const edge = children[rightEdge]
+  const reference = children.find((c, i) => c !== null && i !== domLast && i !== rightEdge)
+  if (!moved || !edge || !reference) return null
+  const style = getComputedStyle(reference)
+  if (style.borderRightStyle === 'none' || parseFloat(style.borderRightWidth) === 0) return null
+  return { moved, edge, normal: style.borderRight }
 }
 
 /**
@@ -66,16 +91,12 @@ export function applyOrder(detection: Detection, visualToDom: readonly number[])
       spacer.el.style.order = spacer.before ? '0' : String(count + 1)
     }
 
-    const domLast = domLastColumn(container)
-    if (domLast < 0 || domLast === rightEdge) continue
-    const moved = container.columnChildren[domLast]
-    const edge = container.columnChildren[rightEdge]
-    const normal = normalBorder(container, domLast, rightEdge)
-    if (!moved || !edge || normal === null) continue
-    // このコンテナが右端の列を特別扱いしていないなら、付け替えるものは何も無い。
-    if (getComputedStyle(moved).borderRight === normal) continue
-    moved.style.borderRight = normal
-    edge.style.borderRightColor = 'transparent'
+    const patch = borderPatch(container, rightEdge)
+    if (!patch) continue
+    // このコンテナが末尾の列を特別扱いしていないなら、付け替えるものは何も無い。
+    if (getComputedStyle(patch.moved).borderRight === patch.normal) continue
+    patch.moved.style.borderRight = patch.normal
+    patch.edge.style.borderRightColor = 'transparent'
   }
   return restore
 }
@@ -98,12 +119,9 @@ export function rollback(restore: readonly RestoreEntry[]): void {
  * 1 本読めば足りる。消す側は `transparent` なのでテーマに依存せず、見張る必要がない。
  */
 function bordersConsistent(container: ContainerRef, rightEdge: number): boolean {
-  const domLast = domLastColumn(container)
-  if (domLast < 0 || domLast === rightEdge) return true
-  const moved = container.columnChildren[domLast]
-  const normal = normalBorder(container, domLast, rightEdge)
-  if (!moved || normal === null) return true
-  return getComputedStyle(moved).borderRight === normal
+  const patch = borderPatch(container, rightEdge)
+  if (!patch) return true
+  return getComputedStyle(patch.moved).borderRight === patch.normal
 }
 
 /**

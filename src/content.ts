@@ -138,23 +138,24 @@ function start(): void {
 }
 
 /**
- * テーマの切り替えを拾って、当てた罫線を測り直させる。
+ * テーマの切り替えを拾って、`reapply` を走らせる。
  *
  * `applyOrder` は罫線を戻す列に解決済みの色を書くので、テーマが変わるとその 1 本だけ
  * 古い色で残る。ところがテーマの切り替えは DOM を動かさないことがあり、その場合は
- * `MutationObserver` も popstate も鳴らないため、`reapply` が呼ばれない。
+ * 上の `MutationObserver` も popstate も鳴らないため、`reapply` が呼ばれない。
+ *
+ * ここでは `schedule()` を呼ぶだけで、検出結果は捨てない。古い色は `verify` の
+ * `bordersConsistent` が見つけて rollback させるので、捨てる必要がない。捨てると
+ * ドラッグ中に `<body>` の style が書かれただけで `drag.ts` が detection を失って
+ * ドラッグを取りやめてしまうし、ダイアログの開閉のたびに全探索が走る。
  *
  * OS 側の切り替えは `prefers-color-scheme`、カレンダー内の設定は `<html>` か `<body>` の
  * 属性の書き替えとして現れる。属性は subtree を見ずにこの 2 要素だけに絞る。日表示は
  * 常時どこかの属性が変わっているので、subtree ごと見ると毎フレーム鳴りっぱなしになる。
  */
 function watchTheme(): void {
-  const invalidate = (): void => {
-    detection = null
-    schedule()
-  }
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', invalidate)
-  const observer = new MutationObserver(invalidate)
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => schedule())
+  const observer = new MutationObserver(() => schedule())
   const options = { attributes: true, attributeFilter: ['class', 'style'] }
   observer.observe(document.documentElement, options)
   observer.observe(document.body, options)

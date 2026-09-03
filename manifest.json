@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "gcalsorter",
+  "version": "0.1.0",
+  "description": "Drag to reorder the member columns in Google Calendar's day view.",
+  "minimum_chrome_version": "119",
+  "permissions": ["storage"],
+  "host_permissions": ["https://calendar.google.com/*"],
+  "action": {
+    "default_title": "gcalsorter",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://calendar.google.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

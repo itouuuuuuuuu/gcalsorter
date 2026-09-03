@@ -250,3 +250,33 @@ export function isAlive(detection: Detection): boolean {
 export function reread(detection: Detection): void {
   detection.columns = detection.columns.map((col) => readColumn(col.header, col.domIndex))
 }
+
+/**
+ * 日表示かどうかを DOM から判定する。
+ *
+ * URL は当てにならない。Chrome の「アプリとしてインストール」で作った PWA は
+ * `https://calendar.google.com/calendar/r` を開いたまま既定のビューを描くため、
+ * 日表示でもパスに `/r/day` が現れない（実測: `/calendar/u/0/r`）。
+ *
+ * 代わりに `data-datekey` の種類数を数える。実測値:
+ *
+ * | ビュー            | data-datekey の種類 | columnheader |
+ * | ----------------- | ------------------- | ------------ |
+ * | 日 (メンバー 9 人) | 1                  | 9            |
+ * | 週 (5 日)          | 5                  | 5            |
+ * | 月                 | 25                 | 5 (曜日名)   |
+ *
+ * 月表示は列ヘッダー自体に datekey を持たないので「ヘッダーに datekey が無いこと」では
+ * 弾けない。文書全体の種類数が「ちょうど 1」であることを要求する。この形なら Google が
+ * この属性をやめたときは 0 になって黙って引き下がる。週表示の日付列を並び替えてしまう
+ * 側には倒れない。左のミニカレンダーを開いても種類が増えないことは実測で確認している。
+ */
+export function isDayView(): boolean {
+  const keys = new Set<string>()
+  for (const el of document.querySelectorAll('[data-datekey]')) {
+    const key = el.getAttribute('data-datekey')
+    if (key) keys.add(key)
+    if (keys.size > 1) return false
+  }
+  return keys.size === 1
+}

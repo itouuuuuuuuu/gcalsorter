@@ -1,15 +1,9 @@
-import { detect, isAlive, reread, toSavedColumn, type Detection } from './columns'
+import { detect, isAlive, isDayView, reread, toSavedColumn, type Detection } from './columns'
 import { applyOrder, rollback, verify, type RestoreEntry } from './apply'
 import { mergeOrder, resolveOrder } from './order'
 import { createDragLayer } from './drag'
 import { defaultSettings, loadSettings, onStoredChange, saveDiagnostics, saveSettings } from './store'
 import type { Diagnostics, SavedColumn, Settings } from './types'
-
-/**
- * 日表示だけを対象にする。週表示や月表示にも列はあるが、そちらの列は日付なので
- * 並び替えたら別物になる。URL に `/r/day` を要求して安全側に倒す。
- */
-const DAY_VIEW = /\/r\/day(\/|$)/
 
 let settings: Settings = defaultSettings
 let detection: Detection | null = null
@@ -63,7 +57,7 @@ function reapply(): void {
     stand('idle', '拡張が無効になっています')
     return
   }
-  if (!DAY_VIEW.test(location.pathname)) {
+  if (!isDayView()) {
     stand('idle', '日表示ではありません')
     return
   }
@@ -139,7 +133,32 @@ function start(): void {
   // SPA なので、日表示から出た/入ったことは URL の変化でしか分からない。
   window.addEventListener('popstate', () => schedule())
   window.addEventListener('hashchange', () => schedule())
+  watchTheme()
   schedule()
+}
+
+/**
+ * テーマの切り替えを拾って、`reapply` を走らせる。
+ *
+ * `applyOrder` は罫線を戻す列に解決済みの色を書くので、テーマが変わるとその 1 本だけ
+ * 古い色で残る。ところがテーマの切り替えは DOM を動かさないことがあり、その場合は
+ * 上の `MutationObserver` も popstate も鳴らないため、`reapply` が呼ばれない。
+ *
+ * ここでは `schedule()` を呼ぶだけで、検出結果は捨てない。古い色は `verify` の
+ * `bordersConsistent` が見つけて rollback させるので、捨てる必要がない。捨てると
+ * ドラッグ中に `<body>` の style が書かれただけで `drag.ts` が detection を失って
+ * ドラッグを取りやめてしまうし、ダイアログの開閉のたびに全探索が走る。
+ *
+ * OS 側の切り替えは `prefers-color-scheme`、カレンダー内の設定は `<html>` か `<body>` の
+ * 属性の書き替えとして現れる。属性は subtree を見ずにこの 2 要素だけに絞る。日表示は
+ * 常時どこかの属性が変わっているので、subtree ごと見ると毎フレーム鳴りっぱなしになる。
+ */
+function watchTheme(): void {
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => schedule())
+  const observer = new MutationObserver(() => schedule())
+  const options = { attributes: true, attributeFilter: ['class', 'style'] }
+  observer.observe(document.documentElement, options)
+  observer.observe(document.body, options)
 }
 
 onStoredChange((change) => {

@@ -1,15 +1,9 @@
-import { detect, isAlive, reread, toSavedColumn, type Detection } from './columns'
+import { detect, isAlive, isDayView, reread, toSavedColumn, type Detection } from './columns'
 import { applyOrder, rollback, verify, type RestoreEntry } from './apply'
 import { mergeOrder, resolveOrder } from './order'
 import { createDragLayer } from './drag'
 import { defaultSettings, loadSettings, onStoredChange, saveDiagnostics, saveSettings } from './store'
 import type { Diagnostics, SavedColumn, Settings } from './types'
-
-/**
- * 日表示だけを対象にする。週表示や月表示にも列はあるが、そちらの列は日付なので
- * 並び替えたら別物になる。URL に `/r/day` を要求して安全側に倒す。
- */
-const DAY_VIEW = /\/r\/day(\/|$)/
 
 let settings: Settings = defaultSettings
 let detection: Detection | null = null
@@ -63,7 +57,7 @@ function reapply(): void {
     stand('idle', '拡張が無効になっています')
     return
   }
-  if (!DAY_VIEW.test(location.pathname)) {
+  if (!isDayView()) {
     stand('idle', '日表示ではありません')
     return
   }

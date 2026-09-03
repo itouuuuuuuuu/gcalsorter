@@ -83,5 +83,26 @@ and it is why the geometric match allows 2px of tolerance.
 ## Why the day view only
 
 In week view the `[role="columnheader"]` elements are the days themselves — `月 31`, `火 1`, `水 2` and
-so on. The same code pointed at that view would happily reorder the days of the week. The extension
-requires `/r/day` in the path and stands down everywhere else.
+so on. The same code pointed at that view would happily reorder the days of the week, so it has to
+recognise the day view and stand down everywhere else.
+
+The URL cannot be used for that. Chrome's "install as app" shortcut opens
+`https://calendar.google.com/calendar/r` and renders the account's default view without ever
+appending the view to the path, so a day view inside the app window sits at `/calendar/u/0/r` —
+no `/r/day` anywhere. The extension used to require `/r/day` and was therefore permanently idle in
+the app window, reporting `日表示ではありません`.
+
+What does separate the views is how many distinct `data-datekey` values the page carries:
+
+| View                | distinct `data-datekey` | `[role="columnheader"]`   |
+| ------------------- | ----------------------- | ------------------------- |
+| Day, 9 members      | 1                       | 9 (the members)           |
+| Week, 5 days        | 5                       | 5 (the days)              |
+| Month               | 25                      | 5 (weekday names)         |
+
+Month view is the reason the test counts document-wide values rather than looking for a datekey
+inside each header: its headers are bare weekday names and carry no datekey either, so "no datekey
+in the header" would wave it through. Requiring *exactly one* distinct value across the document
+also fails in the safe direction — if Google ever drops the attribute the count becomes 0 and the
+extension stands down rather than reordering the days of a week. Opening the left drawer with its
+mini calendar does not add datekeys; measured with the drawer both closed and open.

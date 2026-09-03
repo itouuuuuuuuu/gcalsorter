@@ -39,6 +39,55 @@ one and not the first.
 The own column is the first `[role="columnheader"]` in DOM order. Applying `order` never changes DOM
 order, so this stays true after reordering.
 
+## The right-hand rule belongs to the position, not to the column
+
+Google decorates the **last column in DOM order** so that no divider is drawn down the right edge of
+the grid. Measured on the same 9-member day:
+
+| Container | Every column | The DOM-last column |
+| --- | --- | --- |
+| `DIV.Tmdkcc` (time grid body) | `border-right: 0.909091px solid rgb(221, 227, 234)` | `0.909091px solid rgb(255, 255, 255)` — painted in the surface colour, i.e. erased |
+| `UL.bOyeud` (all-day list) | `border-right: 0.909091px solid rgb(221, 227, 234)` | `0px none` |
+
+The rule behind the first one is `.BiKU4b.Qbfsob { border-right: var(--gm3-sys-color-surface) 1px solid }`.
+The other three containers draw no right border at all and are unaffected.
+
+Setting `order` moves the column but not the decoration, so as soon as the DOM-last column is dragged
+anywhere but the right edge, the divider goes missing in the middle of the grid — and the column that
+*is* now on the right edge draws one that should not be there. `applyOrder` patches exactly two elements
+per container:
+
+- the DOM-last column, now somewhere in the middle, gets the right border read off any untouched column;
+- the column now on the right edge gets `border-right-color: transparent`.
+
+`transparent` rather than a copy of Google's erase colour, because that colour is the surface colour and
+resolves to a literal `rgb(…)`. Inlining it would freeze it: a light/dark switch repaints every column
+except the patched ones, leaving one bright line across the grid. `transparent` shows the surface behind
+the border, which is the same result in every theme.
+
+The other patched column has no such escape — a divider has to be *some* colour — so the resolved value
+is inlined there and watched instead. Two mechanisms:
+
+- `content.ts` invalidates the detection on `prefers-color-scheme` changes and on `class`/`style`
+  attribute changes on `<html>` and `<body>` (the in-app theme setting). Attributes only, no subtree:
+  the day view rewrites attributes deep in its tree constantly, and watching those would fire every
+  frame.
+- `verify` re-checks the invariant the patch relies on — every column except the one on the right edge
+  shares the same right border. That is one `getComputedStyle` pair per container, against the ~45
+  `getBoundingClientRect` calls the position check already makes. A mismatch is treated exactly like a
+  mis-applied order: roll back, measure again, re-apply.
+
+The first mechanism is what actually fires; a CSS-only theme change moves no nodes, so the main
+`MutationObserver` never sees it and `reapply` would not otherwise run at all. The check in `verify` is
+the backstop for a route that neither of those catches.
+
+Restoring the border costs one more field on `RestoreEntry`. Rolling `order` back without it would leave
+the moved decoration behind, and the next `applyOrder` would then read the extension's own value as if it
+were Google's.
+
+Adding a 0.909px border to a column that had none nudges everything to its right by that much. Measured
+worst case against the header anchors: 0.724px in `UL.bOyeud`, well inside the 2px matching tolerance.
+
 ## Re-rendering
 
 Moving one day forward, with inline `order` set on every child beforehand:

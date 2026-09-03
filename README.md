@@ -58,8 +58,9 @@ app rather than guessed — see [docs/SPEC.md](docs/SPEC.md) for the measurement
 - **It checks its own work.** After setting the CSS `order`, it measures the columns again. If anything
   did not land where intended, it rolls the whole thing back and leaves you with a plain, working
   calendar.
-- **Nothing moves in the DOM.** Only inline `order` is set on Google's elements. Grips, the drag ghost
-  and the insertion line are drawn in the extension's own overlay.
+- **Nothing moves in the DOM.** Only inline `order` — plus, on the two columns that need it, the
+  `border-right` that Google attaches to whichever column is last in DOM order — is set on Google's
+  elements. Grips, the drag ghost and the insertion line are drawn in the extension's own overlay.
 
 ## Development
 

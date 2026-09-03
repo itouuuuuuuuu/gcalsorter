@@ -133,7 +133,31 @@ function start(): void {
   // SPA なので、日表示から出た/入ったことは URL の変化でしか分からない。
   window.addEventListener('popstate', () => schedule())
   window.addEventListener('hashchange', () => schedule())
+  watchTheme()
   schedule()
+}
+
+/**
+ * テーマの切り替えを拾って、当てた罫線を測り直させる。
+ *
+ * `applyOrder` は罫線を戻す列に解決済みの色を書くので、テーマが変わるとその 1 本だけ
+ * 古い色で残る。ところがテーマの切り替えは DOM を動かさないことがあり、その場合は
+ * `MutationObserver` も popstate も鳴らないため、`reapply` が呼ばれない。
+ *
+ * OS 側の切り替えは `prefers-color-scheme`、カレンダー内の設定は `<html>` か `<body>` の
+ * 属性の書き替えとして現れる。属性は subtree を見ずにこの 2 要素だけに絞る。日表示は
+ * 常時どこかの属性が変わっているので、subtree ごと見ると毎フレーム鳴りっぱなしになる。
+ */
+function watchTheme(): void {
+  const invalidate = (): void => {
+    detection = null
+    schedule()
+  }
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', invalidate)
+  const observer = new MutationObserver(invalidate)
+  const options = { attributes: true, attributeFilter: ['class', 'style'] }
+  observer.observe(document.documentElement, options)
+  observer.observe(document.body, options)
 }
 
 onStoredChange((change) => {
